@@ -32,52 +32,54 @@ void setup() {
     pinMode(CENTER_IR_SENSOR_PIN, INPUT);
     pinMode(CENTER_RED_LED_PIN, OUTPUT);
 
-    // Start by moving forward at medium speed after 5 seconds
     delay(5000);
     moveForwardMedium();
+  	Serial.begin(9600);
 }
-
 
 void loop() {
     int leftDistance = irDistance(LEFT_IR_LED_PIN, LEFT_IR_SENSOR_PIN);
     int rightDistance = irDistance(RIGHT_IR_LED_PIN, RIGHT_IR_SENSOR_PIN);
     int centerDistance = irDistance(CENTER_IR_LED_PIN, CENTER_IR_SENSOR_PIN);
+  
+    Serial.print("Left: ");
+    Serial.print(leftDistance);
+    Serial.print(" | Center: ");
+    Serial.print(centerDistance);
+    Serial.print(" | Right: ");
+    Serial.println(rightDistance);
 
-    // Handle the center detection and LED
     if (centerDistance == 0) {
-        digitalWrite(CENTER_RED_LED_PIN, HIGH); // Turn on the center red LED
+        digitalWrite(CENTER_RED_LED_PIN, HIGH);
         if (leftDistance > rightDistance) {
             turnLeftSlow();
         } else {
             turnRightSlow();
         }
-        delay(3000); // Wait for 3 seconds
+        delay(3000);
         moveForwardMedium();
     } else {
-        digitalWrite(CENTER_RED_LED_PIN, LOW); // Turn off the center red LED
+        digitalWrite(CENTER_RED_LED_PIN, LOW);
     }
 
-    // Handle the right detection and LED
     if (rightDistance == 0) {
-        digitalWrite(RIGHT_RED_LED_PIN, HIGH); // Turn on the right red LED
+        digitalWrite(RIGHT_RED_LED_PIN, HIGH);
         turnRightSlow();
-        delay(3000); // Wait for 3 seconds
+        delay(3000);
         moveForwardMedium();
     } else {
-        digitalWrite(RIGHT_RED_LED_PIN, LOW); // Turn off the right red LED
+        digitalWrite(RIGHT_RED_LED_PIN, LOW);
     }
 
-    // Handle the left detection and LED
     if (leftDistance == 0) {
-        digitalWrite(LEFT_RED_LED_PIN, HIGH); // Turn on the left red LED
+        digitalWrite(LEFT_RED_LED_PIN, HIGH);
         turnLeftSlow();
-        delay(3000); // Wait for 3 seconds
+        delay(3000);
         moveForwardMedium();
     } else {
-        digitalWrite(LEFT_RED_LED_PIN, LOW); // Turn off the left red LED
+        digitalWrite(LEFT_RED_LED_PIN, LOW);
     }
 }
-
 
 int irDetect(int ledPin, int receivePin, long frequency) {
     tone(ledPin, frequency);
@@ -85,28 +87,34 @@ int irDetect(int ledPin, int receivePin, long frequency) {
     noTone(ledPin);
     int ir = digitalRead(receivePin);
     delay(1);
-    return ir;
+    if (ir == 0) {
+        return frequency; // Return the frequency where an object was detected
+    } else {
+        return 0; // Return 0 if no object was detected at this frequency
+    }
 }
 
 int irDistance(int irLedPin, int irReceivePin) {
-   int distance = 0;
    for(long f = 38000; f <= 42000; f += 1000) {
-      distance += irDetect(irLedPin, irReceivePin, f);
+      int detectedFrequency = irDetect(irLedPin, irReceivePin, f);
+      if (detectedFrequency > 0) {
+          return detectedFrequency; // Return the first detected frequency
+      }
    }
-   return distance;
+   return 0; // Return 0 if no object was detected across all tested frequencies
 }
 
 void moveForwardMedium() {
-    servoLeft.writeMicroseconds(1600);  // Counter-clockwise (medium speed)
-    servoRight.writeMicroseconds(1400); // Clockwise (medium speed)
+    servoLeft.writeMicroseconds(1600);
+    servoRight.writeMicroseconds(1400);
 }
 
 void turnRightSlow() {
-    servoLeft.writeMicroseconds(1550);  // Counter-clockwise (slow speed)
-    servoRight.writeMicroseconds(1550); // Clockwise (slow speed)
+    servoLeft.writeMicroseconds(1550);
+    servoRight.writeMicroseconds(1550);
 }
 
 void turnLeftSlow() {
-    servoLeft.writeMicroseconds(1450);  // Counter-clockwise (slow speed)
-    servoRight.writeMicroseconds(1450); // Clockwise (slow speed)
+    servoLeft.writeMicroseconds(1450);
+    servoRight.writeMicroseconds(1450);
 }
