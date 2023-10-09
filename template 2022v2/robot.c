@@ -326,13 +326,15 @@ void robotMotorMove(struct Robot * robot, int crashed) {
 }
 
 #define CONSTANT_SPEED 5 
+#define ADJUSTMENT_ANGLE 10  
 
 void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_sensor, int right_sensor) {
     // Set robot to a constant speed
     robot->currentSpeed = CONSTANT_SPEED;
+    static int adjustment_made = 0; 
     
     // If the front center sensor detects a wall, halt the robot and decide the turn
-    if (front_centre_sensor == 1) {
+    if (front_centre_sensor == 2) {
         robot->currentSpeed = 0;  // Halt the robot
         
         // If there's an opening on the left, turn left by 90 degrees
@@ -354,9 +356,23 @@ void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_
     // If the front center sensor doesn't detect a wall, continue moving forward
     else {
         robot->direction = UP;
+
+        // Re-centering logic
+        if (left_sensor >= 4 && adjustment_made >= -ADJUSTMENT_ANGLE) {
+            robot->angle += ADJUSTMENT_ANGLE;
+            adjustment_made += ADJUSTMENT_ANGLE;
+        } 
+        else if (right_sensor >= 4 && adjustment_made <= ADJUSTMENT_ANGLE) {
+            robot->angle -= ADJUSTMENT_ANGLE;
+            adjustment_made -= ADJUSTMENT_ANGLE;
+        }
+        // If sensors are equal or no walls detected, try to correct the path if there was an adjustment made
+        else if (adjustment_made != 0) {
+            robot->angle -= adjustment_made;  // correct the angle
+            adjustment_made = 0;  // reset the adjustment tracker
+        }
     }
 }
-
 
 
 
