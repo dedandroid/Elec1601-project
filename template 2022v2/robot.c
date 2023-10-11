@@ -324,55 +324,153 @@ void robotMotorMove(struct Robot * robot, int crashed) {
     robot->x = (int) x_offset;
     robot->y = (int) y_offset;
 }
+#include <math.h>
 
-#define CONSTANT_SPEED 5 
-#define ADJUSTMENT_ANGLE 10  
+#define CONSTANT_SPEED 10
+#define ADJUSTMENT_SPEED 2  // Speed when adjusting
+#define TURN_SPEED 1
+#define MAX_SMOOTH_TURN_ANGLE 10 // Adjust as per testing
+#define ADJUSTMENT_ANGLE 5  
+#define TURN_DELAY_CYCLES 3  // Number of cycles to wait before initiating a turn
+#define DEAD_ZONE 3  // Angle misalignment below which corrections are not made
+#define max(a,b) ((a) > (b) ? (a) : (b))
+#define min(a,b) ((a) < (b) ? (a) : (b))
+#define SMOOTHING_ANGLE 5  // Smaller angle for smoother adjustments
+#define TURN_BASE 2  // Base for exponential increase in turn angle
 
 void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_sensor, int right_sensor) {
-    // Set robot to a constant speed
-    robot->currentSpeed = CONSTANT_SPEED;
     static int adjustment_made = 0; 
+    static int total_turn_angle = 0;  
+    static int left_turn_count = 0;  // Counter for consecutive left turn detections
+    static int right_turn_count = 0;  // Counter for consecutive right turn detections
+    static int in_gradual_turn = 0;  // Flag to indicate whether the robot is in the middle of a gradual turn
+    static int turning_left = 0;  // Flag to indicate whether the robot is turning left
+    static int turning_right = 0;  // Flag to indicate whether the robot is turning right
+    static int was_adjusted = 0;  // Flag to indicate if the robot was adjusted in the previous cycle
+    static int is_completing_turn = 0;  // Flag to indicate if the robot is in the middle of completing a turn
     
-    // If the front center sensor detects a wall, halt the robot and decide the turn
-    if (front_centre_sensor == 2) {
-        robot->currentSpeed = 0;  // Halt the robot
+    // If the robot is completing a turn, ignore all sensors and finish the turn
+    if (is_completing_turn) {
+        int remaining_angle = 90 - total_turn_angle;  
+        robot->angle += turning_left ? -remaining_angle : remaining_angle;  
+        total_turn_angle = 0;
+        turning_left = turning_right = 0;
+        is_completing_turn = 0;
+        return;
+    }
+
+    // If the front center sensor detects a wall
+    if (front_centre_sensor == 1) {
+        robot->currentSpeed = 0;  
         
-        // If there's an opening on the left, turn left by 90 degrees
-        if (left_sensor == 0) {
-            robot->angle -= 90;  // 90-degree turn to the left
-            return;
+        // New logic for initiating a turn when a wall is detected:
+        if (right_sensor == 0) {
+            robot->angle += 90;  // Make a 90-degree right turn
+            return;  // Exit function after initiating the turn
         }
-        // If there's an opening on the right, turn right by 90 degrees
-        else if (right_sensor == 0) {
-            robot->angle += 90;  // 90-degree turn to the right
-            return;
+        else if (left_sensor == 0) {
+            robot->angle -= 90;  // Make a 90-degree left turn
+            return;  // Exit function after initiating the turn
         }
-        // If there's a wall on both the left and right (a dead-end), make a U-turn
-        else {
-            robot->angle += 180;  // U-turn
+
+        // Complete the turn if already in progress
+        if (turning_left || turning_right) {
+            is_completing_turn = 1;  // Set the flag to ignore sensors until the turn is complete
             return;
         }
     }
+
     // If the front center sensor doesn't detect a wall, continue moving forward
     else {
         robot->direction = UP;
+        robot->currentSpeed = CONSTANT_SPEED; 
 
-        // Re-centering logic
-        if (left_sensor >= 4 && adjustment_made >= -ADJUSTMENT_ANGLE) {
-            robot->angle += ADJUSTMENT_ANGLE;
-            adjustment_made += ADJUSTMENT_ANGLE;
-        } 
-        else if (right_sensor >= 4 && adjustment_made <= ADJUSTMENT_ANGLE) {
-            robot->angle -= ADJUSTMENT_ANGLE;
-            adjustment_made -= ADJUSTMENT_ANGLE;
+        // If the robot is not centered and not currently turning, adjust the angle
+        if (adjustment_made != 0 && !turning_left && !turning_right) {
+            robot->angle -= adjustment_made;  
+            adjustment_made = 0;  
         }
-        // If sensors are equal or no walls detected, try to correct the path if there was an adjustment made
-        else if (adjustment_made != 0) {
-            robot->angle -= adjustment_made;  // correct the angle
-            adjustment_made = 0;  // reset the adjustment tracker
+
+        // Logic for initiating a gradual left turn
+        if (left_sensor == 0 && !turning_right) {
+            turning_left = 1; 
+            robot->currentSpeed = TURN_SPEED;
+            if (total_turn_angle < 90) {
+                // Linear increase for slower ramp-up
+                int dynamic_smooth_turn_angle = MAX_SMOOTH_TURN_ANGLE + (0.1 * total_turn_angle);  
+                dynamic_smooth_turn_angle = min(dynamic_smooth_turn_angle, 90 - total_turn_angle);  // Limit the maximum turn angle
+
+                robot->angle -= dynamic_smooth_turn_angle;  
+                total_turn_angle += dynamic_smooth_turn_angle;  
+            }
+            else {
+                total_turn_angle = 0;  // Reset after completing the turn
+                
+                turning_left = 0;  
+            }
+        }
+        // Logic for initiating a gradual right turn
+        else if (right_sensor == 0 && !turning_left) {
+            turning_right = 1;  
+            robot->currentSpeed = TURN_SPEED;
+            if (total_turn_angle < 90) {
+                // Linear increase for slower ramp-up
+                int dynamic_smooth_turn_angle = MAX_SMOOTH_TURN_ANGLE + (0.1 * total_turn_angle);  
+                dynamic_smooth_turn_angle = min(dynamic_smooth_turn_angle, 90 - total_turn_angle);  // Limit the maximum turn angle
+
+                robot->angle += dynamic_smooth_turn_angle;  
+                total_turn_angle += dynamic_smooth_turn_angle;  
+            }
+            else {
+                total_turn_angle = 0;  // Reset after completing the turn
+                turning_right = 0;  
+            }
+        }
+
+
+        // Stick to the wall logic
+        if (left_sensor > 3 && left_sensor <= 5 && !was_adjusted) {
+            robot->angle += ADJUSTMENT_ANGLE;
+            robot->currentSpeed = ADJUSTMENT_SPEED;  // Slow down when adjusting
+            was_adjusted = 1;
+        } 
+        else if (right_sensor > 3 && right_sensor <= 5 && !was_adjusted) {
+            robot->angle -= ADJUSTMENT_ANGLE;
+            robot->currentSpeed = ADJUSTMENT_SPEED;  // Slow down when adjusting
+            was_adjusted = 1;
+        } 
+        else if (left_sensor == 2 && !was_adjusted) {
+            robot->angle -= SMOOTHING_ANGLE;
+            robot->currentSpeed = ADJUSTMENT_SPEED;  // Slow down when adjusting
+            was_adjusted = 1;
+        } 
+        else if (right_sensor == 2 && !was_adjusted) {
+            robot->angle += SMOOTHING_ANGLE;
+            robot->currentSpeed = ADJUSTMENT_SPEED;  // Slow down when adjusting
+            was_adjusted = 1;
+        } 
+        else if (left_sensor == 3 && !was_adjusted) {
+            robot->angle += SMOOTHING_ANGLE;
+            robot->currentSpeed = ADJUSTMENT_SPEED;  // Slow down when adjusting
+            was_adjusted = 1;
+        } 
+        else if (right_sensor == 3 && !was_adjusted) {
+            robot->angle -= SMOOTHING_ANGLE;
+            robot->currentSpeed = ADJUSTMENT_SPEED;  // Slow down when adjusting
+            was_adjusted = 1;
+        }
+        else {
+            was_adjusted = 0;  // Reset adjustment flag
+            robot->currentSpeed = CONSTANT_SPEED;  // Ensure to revert back to normal speed
         }
     }
 }
+
+
+
+
+
+
 
 
 
