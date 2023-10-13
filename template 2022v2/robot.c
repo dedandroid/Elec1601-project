@@ -2,10 +2,10 @@
 #include <SDL2/SDL_image.h>
 
 void setup_robot(struct Robot *robot){
-    robot->x = OVERALL_WINDOW_WIDTH/2-71;
-    robot->y = OVERALL_WINDOW_HEIGHT-76;
-    robot->true_x = OVERALL_WINDOW_WIDTH/2-71;
-    robot->true_y = OVERALL_WINDOW_HEIGHT-76;
+    robot->x = OVERALL_WINDOW_WIDTH/2-50;//71;
+    robot->y = OVERALL_WINDOW_HEIGHT-50;//76;
+    robot->true_x = OVERALL_WINDOW_WIDTH/2-50;//71;
+    robot->true_y = OVERALL_WINDOW_HEIGHT-50;//76;
     robot->width = ROBOT_WIDTH;
     robot->height = ROBOT_HEIGHT;
     robot->direction = 0;
@@ -188,7 +188,7 @@ void robotUpdate(struct SDL_Renderer * renderer, struct Robot * robot){
     double xDir, yDir;
 
     int robotCentreX, robotCentreY, xTR, yTR, xTL, yTL, xBR, yBR, xBL, yBL;
-    SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
+    //SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
 
     /*
     //Other Display options:
@@ -219,10 +219,10 @@ void robotUpdate(struct SDL_Renderer * renderer, struct Robot * robot){
 
         // Set the destination rectangle for the car image
         SDL_Rect carDestinationRect;
-        carDestinationRect.x = robot->true_x - 37;
+        carDestinationRect.x = robot->true_x - ROBOT_WIDTH + (5 - 5/22 *(ROBOT_WIDTH - 42));
         carDestinationRect.y = robot->true_y;
-        carDestinationRect.w = 120; // Adjust the size as needed
-        carDestinationRect.h = 80; // Adjust the size as needed
+        carDestinationRect.w = ROBOT_HEIGHT*2;
+        carDestinationRect.h = ROBOT_WIDTH *2;
 
         // Rotate and render the car image
         double angleRadians = robot->angle * M_PI / 180.0;
@@ -352,10 +352,10 @@ void robotMotorMove(struct Robot * robot, int crashed) {
 #include <math.h>
 
 #define CONSTANT_SPEED 10
-#define ADJUSTMENT_SPEED 2  // Speed when adjusting
+#define ADJUSTMENT_SPEED 1  // Speed when adjusting
 #define TURN_SPEED 1
 #define MAX_SMOOTH_TURN_ANGLE 10 // Adjust as per testing
-#define ADJUSTMENT_ANGLE 5  
+#define ADJUSTMENT_ANGLE 10  
 #define TURN_DELAY_CYCLES 3  // Number of cycles to wait before initiating a turn
 #define DEAD_ZONE 3  // Angle misalignment below which corrections are not made
 #define max(a,b) ((a) > (b) ? (a) : (b))
@@ -376,6 +376,7 @@ void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_
     
     // If the robot is completing a turn, ignore all sensors and finish the turn
     if (is_completing_turn) {
+        printf("Completing a turn...\n");
         int remaining_angle = 90 - total_turn_angle;  
         robot->angle += turning_left ? -remaining_angle : remaining_angle;  
         total_turn_angle = 0;
@@ -385,21 +386,31 @@ void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_
     }
 
     // If the front center sensor detects a wall
-    if (front_centre_sensor == 1) {
+    if (front_centre_sensor != 0) {
+        printf("Wall detected in front!\n");
         robot->currentSpeed = 0;  
         
         // New logic for initiating a turn when a wall is detected:
         if (right_sensor == 0) {
+            printf("Turning right (wall in front, no wall to right)...\n");
             robot->angle += 90;  // Make a 90-degree right turn
             return;  // Exit function after initiating the turn
         }
         else if (left_sensor == 0) {
+            printf("Turning left (wall in front, no wall to left)...\n");
             robot->angle -= 90;  // Make a 90-degree left turn
+            return;  // Exit function after initiating the turn
+        }
+
+        else if (left_sensor == 1 && left_sensor == 1 )  {
+            printf("Turning back)...\n");
+            robot->angle -= 180;  // Make a 90-degree left turn
             return;  // Exit function after initiating the turn
         }
 
         // Complete the turn if already in progress
         if (turning_left || turning_right) {
+            printf("Completing a turn (wall in front, turning left/right)...\n");
             is_completing_turn = 1;  // Set the flag to ignore sensors until the turn is complete
             return;
         }
@@ -407,17 +418,20 @@ void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_
 
     // If the front center sensor doesn't detect a wall, continue moving forward
     else {
+        printf("No wall in front, moving forward...\n");
         robot->direction = UP;
         robot->currentSpeed = CONSTANT_SPEED; 
 
         // If the robot is not centered and not currently turning, adjust the angle
         if (adjustment_made != 0 && !turning_left && !turning_right) {
+            printf("Adjusting angle (not centered, not turning)...\n");
             robot->angle -= adjustment_made;  
             adjustment_made = 0;  
         }
 
         // Logic for initiating a gradual left turn
         if (left_sensor == 0 && !turning_right) {
+            printf("Initiating gradual left turn...\n");
             turning_left = 1; 
             robot->currentSpeed = TURN_SPEED;
             if (total_turn_angle < 90) {
@@ -436,6 +450,7 @@ void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_
         }
         // Logic for initiating a gradual right turn
         else if (right_sensor == 0 && !turning_left) {
+            printf("Initiating gradual right turn...\n");
             turning_right = 1;  
             robot->currentSpeed = TURN_SPEED;
             if (total_turn_angle < 90) {
@@ -455,36 +470,43 @@ void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_
 
         // Stick to the wall logic
         if (left_sensor > 3 && left_sensor <= 5 && !was_adjusted) {
+            printf("Adjusting left (left sensor: %d)...\n", left_sensor);
             robot->angle += ADJUSTMENT_ANGLE;
             robot->currentSpeed = ADJUSTMENT_SPEED;  // Slow down when adjusting
             was_adjusted = 1;
         } 
         else if (right_sensor > 3 && right_sensor <= 5 && !was_adjusted) {
+            printf("Adjusting right (right sensor: %d)...\n", right_sensor);
             robot->angle -= ADJUSTMENT_ANGLE;
             robot->currentSpeed = ADJUSTMENT_SPEED;  // Slow down when adjusting
             was_adjusted = 1;
         } 
         else if (left_sensor == 2 && !was_adjusted) {
+            printf("Smoothing left (left sensor: 2)...\n");
             robot->angle -= SMOOTHING_ANGLE;
             robot->currentSpeed = ADJUSTMENT_SPEED;  // Slow down when adjusting
             was_adjusted = 1;
         } 
         else if (right_sensor == 2 && !was_adjusted) {
+            printf("Smoothing right (right sensor: 2)...\n");
             robot->angle += SMOOTHING_ANGLE;
             robot->currentSpeed = ADJUSTMENT_SPEED;  // Slow down when adjusting
             was_adjusted = 1;
         } 
         else if (left_sensor == 3 && !was_adjusted) {
+            printf("Smoothing left (left sensor: 3)...\n");
             robot->angle += SMOOTHING_ANGLE;
             robot->currentSpeed = ADJUSTMENT_SPEED;  // Slow down when adjusting
             was_adjusted = 1;
         } 
         else if (right_sensor == 3 && !was_adjusted) {
+            printf("Smoothing right (right sensor: 3)...\n");
             robot->angle -= SMOOTHING_ANGLE;
             robot->currentSpeed = ADJUSTMENT_SPEED;  // Slow down when adjusting
             was_adjusted = 1;
         }
         else {
+            printf("No adjustment needed, moving forward...\n");
             was_adjusted = 0;  // Reset adjustment flag
             robot->currentSpeed = CONSTANT_SPEED;  // Ensure to revert back to normal speed
         }

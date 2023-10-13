@@ -9,8 +9,8 @@
 #define OVERALL_WINDOW_WIDTH 640
 #define OVERALL_WINDOW_HEIGHT 480
 
-#define ROBOT_WIDTH 42 //took away 5 for overlap errors
-#define ROBOT_HEIGHT 62 //took away 5 for overlap errors
+#define ROBOT_WIDTH 20//42 //took away 5 for overlap errors
+#define ROBOT_HEIGHT 20//62 //took away 5 for overlap errors
 
 #define WALL_WIDTH 10
 
@@ -18,7 +18,7 @@
 #define DEFAULT_SPEED_CHANGE 1
 #define MAX_ROBOT_SPEED 25
 #define PI 3.14159265
-#define SENSOR_VISION 30
+#define SENSOR_VISION 35
 struct Wall {
     int x,y;
     int width, height;
