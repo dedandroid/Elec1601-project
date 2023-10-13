@@ -1,4 +1,5 @@
 #include "robot.h"
+#include <SDL2/SDL_image.h>
 
 void setup_robot(struct Robot *robot){
     robot->x = OVERALL_WINDOW_WIDTH/2-71;
@@ -206,6 +207,30 @@ void robotUpdate(struct SDL_Renderer * renderer, struct Robot * robot){
     yDirInt = robot->y+ROBOT_HEIGHT/2+ (int) yDir;
     SDL_RenderDrawLine(renderer,robot->x+ROBOT_WIDTH/2, robot->y+ROBOT_HEIGHT/2, xDirInt, yDirInt);
     */
+    // Load the car image
+    if ( !( IMG_Init(IMG_INIT_PNG) & IMG_INIT_JPG ) ) {
+        printf("Could not initialize SDL_image \n");
+    }
+    SDL_Surface *carImage = IMG_Load("white_car.png"); // Replace with the actual image file path
+    if (carImage != NULL) {
+        // Create a texture from the original image
+        SDL_Texture *carTexture = SDL_CreateTextureFromSurface(renderer, carImage);
+        SDL_FreeSurface(carImage);
+
+        // Set the destination rectangle for the car image
+        SDL_Rect carDestinationRect;
+        carDestinationRect.x = robot->true_x - 37;
+        carDestinationRect.y = robot->true_y;
+        carDestinationRect.w = 120; // Adjust the size as needed
+        carDestinationRect.h = 80; // Adjust the size as needed
+
+        // Rotate and render the car image
+        double angleRadians = robot->angle * M_PI / 180.0;
+        SDL_RenderCopyEx(renderer, carTexture, NULL, &carDestinationRect, angleRadians * 180.0 / M_PI, NULL, SDL_FLIP_NONE);
+
+        // Destroy the car texture when done
+        SDL_DestroyTexture(carTexture);
+    }
 
     //Rotating Square
     //Vector rotation to work out corners x2 = x1cos(angle)-y1sin(angle), y2 = x1sin(angle)+y1cos(angle)
