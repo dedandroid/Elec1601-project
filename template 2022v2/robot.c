@@ -402,7 +402,7 @@ void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_
             return;  // Exit function after initiating the turn
         }
 
-        else if (left_sensor == 1 && left_sensor == 1 )  {
+        else if (left_sensor == 1 && right_sensor == 1 )  {
             printf("Turning back)...\n");
             robot->angle -= 180;  // Make a 90-degree left turn
             return;  // Exit function after initiating the turn
