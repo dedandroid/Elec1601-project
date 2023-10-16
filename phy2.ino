@@ -29,25 +29,10 @@ struct Robot {
 Robot myRobot;
 
 void setup() {
-    servoLeft.attach(13);
-    servoRight.attach(12);
-
-    pinMode(LEFT_IR_LED_PIN, OUTPUT);
-    pinMode(LEFT_IR_SENSOR_PIN, INPUT);
-    pinMode(LEFT_RED_LED_PIN, OUTPUT);
-
-    pinMode(RIGHT_IR_LED_PIN, OUTPUT);
-    pinMode(RIGHT_IR_SENSOR_PIN, INPUT);
-    pinMode(RIGHT_RED_LED_PIN, OUTPUT);
-
-    pinMode(CENTER_IR_LED_PIN, OUTPUT);
-    pinMode(CENTER_IR_SENSOR_PIN, INPUT);
-    pinMode(CENTER_RED_LED_PIN, OUTPUT);
-
-    delay(5000);
-
-    // Serial initialization for debugging
-    Serial.begin(9600);
+    pinMode(irReceiverPin, INPUT);  // IR receiver pin is an input
+    pinMode(irLedPin, OUTPUT);  // IR LED pin is an ouput
+    pinMode(redLedPin, OUTPUT);  // Red LED pin is an output
+    Serial.begin(9600);  // Set data rate to 9600 bps
 }
 
 void loop() {
@@ -98,66 +83,7 @@ void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_
     static int was_adjusted = 0;  // Flag to indicate if the robot was adjusted in the previous cycle
     static int is_completing_turn = 0;  // Flag to indicate if the robot is in the middle of completing a turn
     
-    if(front_centre_sensor != 0) {
-        digitalWrite(CENTER_RED_LED_PIN, HIGH);
-    } else {
-        digitalWrite(CENTER_RED_LED_PIN, LOW);
-    }
 
-    if(left_sensor != 0) {
-        digitalWrite(LEFT_RED_LED_PIN, HIGH);
-    } else {
-        digitalWrite(LEFT_RED_LED_PIN, LOW);
-    }
-
-    if(right_sensor != 0) {
-        digitalWrite(RIGHT_RED_LED_PIN, HIGH);
-    } else {
-        digitalWrite(RIGHT_RED_LED_PIN, LOW);
-    }
-
-
-    // If the robot is completing a turn, ignore all sensors and finish the turn
-    if (is_completing_turn) {
-
-        int remaining_angle = 90 - total_turn_angle;  
-        robot->angle += turning_left ? -remaining_angle : remaining_angle;  
-        total_turn_angle = 0;
-        turning_left = turning_right = 0;
-        is_completing_turn = 0;
-        return;
-    }
-
-    // If the front center sensor detects a wall
-    if (front_centre_sensor != 0) {
-
-        robot->currentSpeed = 0;  
-        
-        // New logic for initiating a turn when a wall is detected:
-        if (right_sensor == 0) {
-
-            robot->angle += 90;  // Make a 90-degree right turn
-            return;  // Exit function after initiating the turn
-        }
-        else if (left_sensor == 0) {
-
-            robot->angle -= 90;  // Make a 90-degree left turn
-            return;  // Exit function after initiating the turn
-        }
-
-        else if (left_sensor == 1 && left_sensor == 1 )  {
-
-            robot->angle -= 180;  // Make a 90-degree left turn
-            return;  // Exit function after initiating the turn
-        }
-
-        // Complete the turn if already in progress
-        if (turning_left || turning_right) {
-
-            is_completing_turn = 1;  // Set the flag to ignore sensors until the turn is complete
-            return;
-        }
-    }
 
     // If the front center sensor doesn't detect a wall, continue moving forward
     else {
@@ -291,19 +217,27 @@ void controlMotorsBasedOnNavigation(Robot* robot) {
     servoRight.write(rightServoSpeed);
 }
 
-int irDistance(int irLedPin, int irSensorPin) {
-    digitalWrite(irLedPin, HIGH);  // Turn on the IR LED
-    delay(1);  // Short delay to ensure stable reading
-    int distance = analogRead(irSensorPin);  // Read the IR sensor value
-    digitalWrite(irLedPin, LOW);  // Turn off the IR LED
+int irDetect(long frequency) {
+    tone(irLedPin, frequency);  // Turn on the IR LED square wave
+    delay(1);  // Wait 1 ms
+    noTone(irLedPin);  // Turn off the IR LED
+    int ir = digitalRead(irReceiverPin);  // IR receiver -> ir variable
+    delay(1);  // Down time before recheck
+    return ir;  // Return 1 no detect, 0 detect
+}
 
-    // Map the analog reading (which goes from 0 - 1023) to a distance scale (0 - 5).
+int irDistance(int irLedPin, int irReceiverPin) {
+    int distance = 0;
+    for(long f = 38000; f <= 42000; f += 1000) {
+        distance += irDetect(f);
+    }
+    // Map the accumulated distance (which goes from 0 to 5) to a discrete scale (0 - 5).
     // Note: Actual mapping might need to be adjusted based on empirical testing.
-    int scaledDistance = map(distance, 0, 1023, 0, 5);  
-
+    int scaledDistance = map(distance, 0, 50, 0, 5);  // Assuming 50 is a max value
+    
     // Ensure that the scaled distance is within the desired range [0, 5].
     scaledDistance = constrain(scaledDistance, 0, 5);
-
+    
     return scaledDistance;
 }
 

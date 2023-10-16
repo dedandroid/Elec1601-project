@@ -354,14 +354,23 @@ void robotMotorMove(struct Robot * robot, int crashed) {
 #define CONSTANT_SPEED 10
 #define ADJUSTMENT_SPEED 1  // Speed when adjusting
 #define TURN_SPEED 1
-#define MAX_SMOOTH_TURN_ANGLE 10 // Adjust as per testing
-#define ADJUSTMENT_ANGLE 10  
+#define MAX_SMOOTH_TURN_ANGLE 8 // Adjust as per testing
+#define ADJUSTMENT_ANGLE 15  
 #define TURN_DELAY_CYCLES 3  // Number of cycles to wait before initiating a turn
 #define DEAD_ZONE 3  // Angle misalignment below which corrections are not made
 #define max(a,b) ((a) > (b) ? (a) : (b))
 #define min(a,b) ((a) < (b) ? (a) : (b))
-#define SMOOTHING_ANGLE 5  // Smaller angle for smoother adjustments
+#define SMOOTHING_ANGLE 3  // Smaller angle for smoother adjustments
 #define TURN_BASE 2  // Base for exponential increase in turn angle
+
+void setSpeed(struct Robot* robot, int desiredSpeed) {
+    if (robot->currentSpeed < desiredSpeed) {
+        robot->currentSpeed += 1;
+    } else if (robot->currentSpeed > desiredSpeed) {
+        robot->currentSpeed -= 1;
+    }
+}
+
 
 void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_sensor, int right_sensor) {
     static int adjustment_made = 0; 
@@ -373,6 +382,7 @@ void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_
     static int turning_right = 0;  // Flag to indicate whether the robot is turning right
     static int was_adjusted = 0;  // Flag to indicate if the robot was adjusted in the previous cycle
     static int is_completing_turn = 0;  // Flag to indicate if the robot is in the middle of completing a turn
+    static int turning_back = 0; 
     
     // If the robot is completing a turn, ignore all sensors and finish the turn
     if (is_completing_turn) {
@@ -384,37 +394,55 @@ void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_
         is_completing_turn = 0;
         return;
     }
-
-    // If the front center sensor detects a wall
-    if (front_centre_sensor != 0) {
-        printf("Wall detected in front!\n");
-        robot->currentSpeed = 0;  
         
-        // New logic for initiating a turn when a wall is detected:
-        if (right_sensor == 0) {
-            printf("Turning right (wall in front, no wall to right)...\n");
-            robot->angle += 90;  // Make a 90-degree right turn
-            return;  // Exit function after initiating the turn
-        }
-        else if (left_sensor == 0) {
-            printf("Turning left (wall in front, no wall to left)...\n");
-            robot->angle -= 90;  // Make a 90-degree left turn
-            return;  // Exit function after initiating the turn
-        }
-
-        else if (left_sensor == 1 && right_sensor == 1 )  {
-            printf("Turning back)...\n");
-            robot->angle -= 180;  // Make a 90-degree left turn
-            return;  // Exit function after initiating the turn
-        }
-
-        // Complete the turn if already in progress
-        if (turning_left || turning_right) {
-            printf("Completing a turn (wall in front, turning left/right)...\n");
-            is_completing_turn = 1;  // Set the flag to ignore sensors until the turn is complete
-            return;
-        }
+// If the front center sensor detects a wall
+if (front_centre_sensor != 0) {
+    printf("Wall detected in front!\n");
+    robot->currentSpeed = 0;  // Ensure the robot doesn't move forward
+    
+    // When encountering a dead end, perform a 180-degree turn in 15-degree increments
+    if (left_sensor != 0 && right_sensor != 0) {
+        printf("Dead end encountered, turning back...\n");
+        turning_back = 1;
+        turning_left = turning_right = 0;  // Ensure other turning flags are off
     }
+    
+    // Logic to continue the 180-degree turn once initiated
+    if (turning_back) {
+        if (total_turn_angle < 180) {
+            printf("Continuing back turn...\n");
+            robot->angle -= 15;  
+            total_turn_angle += 15;
+        } else {
+            // Reset variables after the turn is complete
+            printf("Back turn completed.\n");
+            turning_back = 0;
+            total_turn_angle = 0;
+        }
+        return;  // Exit function to ignore other logic while turning back
+    }
+    
+    // New logic for initiating a turn when a wall is detected:
+    if (right_sensor == 0) {
+        printf("Turning right (wall in front, no wall to right)...\n");
+        robot->angle += 15;  // Make a 90-degree right turn
+        return;  // Exit function after initiating the turn
+    }
+    else if (left_sensor == 0) {
+        printf("Turning left (wall in front, no wall to left)...\n");
+        robot->angle -= 15;  // Make a 90-degree left turn
+        return;  // Exit function after initiating the turn
+    }
+
+    // Complete the turn if already in progress
+    if (turning_left || turning_right) {
+        printf("Completing a turn (wall in front, turning left/right)...\n");
+        is_completing_turn = 1;  // Set the flag to ignore sensors until the turn is complete
+        return;
+    }
+}
+
+
 
     // If the front center sensor doesn't detect a wall, continue moving forward
     else {
@@ -434,6 +462,7 @@ void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_
             printf("Initiating gradual left turn...\n");
             turning_left = 1; 
             robot->currentSpeed = TURN_SPEED;
+
             if (total_turn_angle < 90) {
                 // Linear increase for slower ramp-up
                 int dynamic_smooth_turn_angle = MAX_SMOOTH_TURN_ANGLE + (0.1 * total_turn_angle);  
@@ -453,6 +482,7 @@ void robotAutoMotorMove(struct Robot * robot, int front_centre_sensor, int left_
             printf("Initiating gradual right turn...\n");
             turning_right = 1;  
             robot->currentSpeed = TURN_SPEED;
+
             if (total_turn_angle < 90) {
                 // Linear increase for slower ramp-up
                 int dynamic_smooth_turn_angle = MAX_SMOOTH_TURN_ANGLE + (0.1 * total_turn_angle);  
